@@ -1,5 +1,10 @@
 package project;
 
+import seedfinding.SeedChecker;
+import seedfinding.SeedCheckerInitializer;
+import seedfinding.CoordResult;
+import cubiomes.Coord;
+
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -64,55 +69,78 @@ public class CmdLineRunner {
 
         // 执行搜索
         System.out.println("开始搜索种子 " + seed + "，最大Y=" + maxY);
-        List<String> results = new ArrayList<>();
-        CountDownLatch latch = new CountDownLatch(1);
+        List<CoordResult> results = new ArrayList<>();
 
         try {
-            // 创建搜索器实例
-            SearchCoords searcher = new SearchCoords();
+            // 1. 初始化 SeedChecker（与 GUI 相同）
+            SeedCheckerInitializer initializer = new SeedCheckerInitializer();
+            // 设置版本（可能需要转换为内部版本号）
+            int mcVersion = getMCVersion(version);
+            initializer.setMCVersion(mcVersion);
+            // 设置搜索范围
+            initializer.setSearchArea(minX, maxX, minZ, maxZ);
+            // 设置最大 Y（注意：原 GUI 中 "maxY" 是高度上限，即只找 Y <= maxY 的小屋）
+            initializer.setMaxY(maxY);
+            // 设置是否检查精确生成（设为 true 更准确，但慢）
+            initializer.setCheckExactGeneration(true);
+
+            // 2. 创建 SeedChecker 实例
+            SeedChecker checker = initializer.createSeedChecker();
+
+            // 3. 设置回调收集结果
+            // 由于 SeedChecker 没有直接的回调接口，我们使用它的 `addResultListener` 方法（如果存在）
+            // 或者我们可以在搜索完成后通过 `getResults()` 获取（具体 API 需查看源码）
+            // 根据原仓库代码，SeedChecker 继承自 SwingWorker，有 `get()` 方法等待完成
+            // 我们采用后台执行并等待完成的方式
             
-            // 设置回调：每找到一个结果就添加到列表
-            searcher.startSearch(
-                seed,
-                minX, maxX, minZ, maxZ,
-                maxY,
-                1,                    // 单线程 (命令行模式)
-                false,                // 不检查精确生成 (加快速度)
-                (String coord) -> {   // 坐标格式: "/tp x y z"
-                    if (coord != null && !coord.isEmpty()) {
-                        results.add(coord);
-                    }
-                }
-            );
-            
-            // 等待搜索完成 (最多等待 5 分钟)
-            // 注意: SearchCoords 可能没有 awaitCompletion，我们假设有
-            // 如果没有，可以用轮询或修改 SearchCoords 添加标志
-            // 这里我们简单等待 30 秒 (实际搜索可能更快)
-            Thread.sleep(30000);
-            
+            // 启动搜索（假设 SeedChecker 是 SwingWorker，我们使用 execute）
+            checker.execute();
+
+            // 等待搜索完成（最多 5 分钟）
+            boolean done = checker.get(5, TimeUnit.MINUTES);
+            if (!done) {
+                System.err.println("搜索超时，可能未完成");
+                System.exit(1);
+            }
+
+            // 获取结果（假设有 getResults 方法）
+            // 实际需要根据 SeedChecker 的具体实现调整
+            // 这里使用反射尝试获取私有字段 results（如果存在）
+            java.lang.reflect.Field resultsField = null;
+            try {
+                resultsField = SeedChecker.class.getDeclaredField("results");
+                resultsField.setAccessible(true);
+                results = (List<CoordResult>) resultsField.get(checker);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                // 如果没有 results 字段，尝试其他方式
+                System.err.println("无法获取搜索结果，请检查 SeedChecker API");
+                e.printStackTrace();
+                System.exit(1);
+            }
+
         } catch (Exception e) {
             System.err.println("搜索出错: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }
 
-        // 按 Y 坐标排序 (从低到高)
-        results.sort((a, b) -> {
-            int y1 = extractY(a);
-            int y2 = extractY(b);
-            return Integer.compare(y1, y2);
-        });
+        // 如果没有结果，输出提示
+        if (results == null || results.isEmpty()) {
+            System.out.println("未找到任何女巫小屋");
+            return;
+        }
 
-        // 输出结果到文件
+        // 按 Y 坐标排序（从低到高）
+        results.sort(Comparator.comparingInt(r -> r.y));
+
+        // 输出到文件
         try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile))) {
             writer.println("找到 " + results.size() + " 个女巫小屋：");
-            for (String line : results) {
-                writer.println(line);
+            for (CoordResult r : results) {
+                writer.println("X=" + r.x + ", Y=" + r.y + ", Z=" + r.z);
             }
-            if (!results.isEmpty()) {
-                writer.println("\n最低 Y 坐标的小屋: " + results.get(0));
-            }
+            CoordResult lowest = results.get(0);
+            writer.println("\n最低 Y 坐标的小屋: X=" + lowest.x + ", Y=" + lowest.y + ", Z=" + lowest.z);
             System.out.println("结果已保存到: " + outputFile);
         } catch (IOException e) {
             System.err.println("写入文件失败: " + e.getMessage());
@@ -134,16 +162,13 @@ public class CmdLineRunner {
         System.out.println("  --help             显示此帮助");
     }
 
-    private static int extractY(String coord) {
-        // 从 "/tp x y z" 中提取 y
-        String[] parts = coord.split(" ");
-        if (parts.length >= 3) {
-            try {
-                return Integer.parseInt(parts[2]);
-            } catch (NumberFormatException e) {
-                // 忽略
-            }
+    private static int getMCVersion(String version) {
+        // 将版本字符串转换为内部版本号（需根据实际情况映射）
+        // 示例：26.2 -> 26
+        try {
+            return Integer.parseInt(version.split("\\.")[0]);
+        } catch (Exception e) {
+            return 26;
         }
-        return Integer.MAX_VALUE;
     }
 }
