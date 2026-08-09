@@ -1,40 +1,20 @@
-plugins {
-    id 'java'
-    id 'application'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
 repositories {
     mavenCentral()
+    // SeedChecker 官方发布仓（必须）
     maven { url = "https://maven.seedfinding.com/" }
 }
 
 dependencies {
+    // ✅ 唯一对外依赖，内部传递依赖由它自己管
     implementation 'nl.jellejurre:seedchecker:1.0.2'
+
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
-}
 
-application {
-    mainClass = 'project.Launcher'
-}
-
-shadowJar {
-    archiveBaseName.set('LowYSwampHut')
-    archiveClassifier.set('')
-    archiveVersion.set('')
-
-    manifest {
-        attributes 'Main-Class': 'project.CmdLineRunner'
-    }
-
-    mergeServiceFiles()
-    transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+    // ❌ 下面这些全部删掉：
+    // implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
+    // implementation 'com.seedfinding:mc_core:1.0.0'
+    // implementation 'com.seedfinding:mc_math:...'
+    // implementation 'com.seedfinding:mc_seed:...'
+    // implementation 'net.fabricmc:fabric-loader:...'
 }
