@@ -14,43 +14,44 @@ java {
 
 repositories {
     mavenCentral()
+    // SeedFinding 官方 Maven 仓库（用于 mccore）
+    maven {
+        url 'https://maven.seedfinding.com'
+    }
+    // JitPack（用于 seedchecker）
+    maven {
+        url 'https://jitpack.io'
+    }
 }
 
 dependencies {
-    // SeedChecker & MC Core
-    implementation 'nl.jellejurre:seedchecker:1.0-SNAPSHOT' // 或你本地路径
-    implementation 'com.seedfinding:mccore:1.0.0'
-
-    // Log4j（必须，否则运行时炸）
+    // seedchecker（通过 JitPack）
+    implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
+    
+    // mccore（通过 SeedFinding Maven）
+    implementation 'com.seedfinding:mc_core:1.0.0'
+    
+    // Log4j
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 }
 
 application {
-    // ✅ 默认入口：GUI（双击 jar 时用）
     mainClass = 'project.Launcher'
 }
 
 shadowJar {
     archiveBaseName.set('LowYSwampHut')
-    archiveClassifier.set('') // 生成 LowYSwampHut.jar
+    archiveClassifier.set('')
     archiveVersion.set('')
 
-    // ✅ CLI 入口（java -jar LowYSwampHut.jar 时生效）
     manifest {
-        attributes(
-            'Main-Class': 'project.CmdLineRunner'
-        )
+        attributes('Main-Class': 'project.CmdLineRunner')
     }
 
-    // ✅ 合并 log4j2 配置文件（非常重要）
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-
-    // ✅ 排除签名文件（防止 SecurityException）
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-
-    // ✅ 强制包含 SeedChecker / MC 的反射资源
     includeEmptyDirs = false
 }
 
