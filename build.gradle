@@ -11,10 +11,4 @@ dependencies {
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 
-    // ❌ 下面这些全部删掉：
-    // implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
-    // implementation 'com.seedfinding:mc_core:1.0.0'
-    // implementation 'com.seedfinding:mc_math:...'
-    // implementation 'com.seedfinding:mc_seed:...'
-    // implementation 'net.fabricmc:fabric-loader:...'
-}
+  
