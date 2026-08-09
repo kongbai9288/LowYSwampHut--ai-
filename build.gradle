@@ -1,54 +1,19 @@
-plugins {
-    id 'java'
-    id 'application'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
-}
-
-group = 'project'
-version = '1.0'
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
 repositories {
     mavenCentral()
-    // ✅ SeedChecker 官方仓库（必须）
     maven { url = "https://maven.seedfinding.com/" }
+    maven { url = "https://repo.jellejurre.dev" }
+    maven { url = "https://jitpack.io" }
 }
 
 dependencies {
-    // ✅ 唯一对外依赖（内部传递依赖由它自己管理）
-    implementation 'nl.jellejurre:seedchecker:1.0.2'
+    // SeedChecker（关掉传递依赖，避免拉 fabric-loader）
+    implementation('com.github.jellejurre:seed-checker:1.2.0-1.17.1-pre1') {
+        transitive = false
+    }
+    // MC core 正式版（它自己带正确版本的 mc_math / mc_seed）
+    implementation 'com.seedfinding:mc_core:1.210.0'
+    implementation 'com.seedfinding:mc_feature:1.171.9'
 
-    // ✅ Log4j（SeedChecker / MC 必须）
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
-}
-
-application {
-    // ✅ 默认 GUI 入口（IDE / 双击 jar）
-    mainClass = 'project.Launcher'
-}
-
-shadowJar {
-    archiveBaseName.set('LowYSwampHut')
-    archiveClassifier.set('')   // 生成 LowYSwampHut.jar
-    archiveVersion.set('')
-
-    // ✅ CLI 入口（java -jar LowYSwampHut.jar）
-    manifest {
-        attributes 'Main-Class': 'project.CmdLineRunner'
-    }
-
-    mergeServiceFiles()
-    transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-
-    // ✅ 排除签名文件，防止 SecurityException
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-}
-
-tasks.named('build').configure {
-    dependsOn shadowJar
 }
