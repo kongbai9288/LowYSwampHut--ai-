@@ -1,63 +1,53 @@
 package project;
 
-import seedfinding.SeedChecker;
-import seedfinding.SeedCheckerInitializer;
-import seedfinding.CoordResult;
-import cubiomes.Coord;
+import nl.jellejurre.seedchecker.SeedChecker;
+import project.SearchCoords;
+import project.GameVersion;
+import project.WorldPresetMode;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * LowYSwampHut 命令行入口
- * 用法: java -jar LowYSwampHut.jar --seed <种子> [--max-y <数值>] [--output <文件>]
+ * LowYSwampHut 命令行入口（基于 SearchCoords 引擎）
+ * 用法: java -jar LowYSwampHut.jar --seed <种子> [选项]
  */
 public class CmdLineRunner {
+
     public static void main(String[] args) {
-        // 默认参数
+        // 1. 初始化 log4j 和 SharedConstants（与 Launcher 一致）
+        initLogging();
+
+        // 2. 默认参数
         long seed = 0;
         int maxY = -40;
         int minX = -58594, maxX = 58593;
         int minZ = -58594, maxZ = 58593;
         String outputFile = "result.txt";
-        String version = "26.2";
+        String versionName = "26.2";
+        boolean checkGen = false;
+        int threads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
 
-        // 解析命令行参数
+        // 3. 解析命令行参数
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "--seed":
-                    seed = Long.parseLong(args[++i]);
-                    break;
-                case "--max-y":
-                    maxY = Integer.parseInt(args[++i]);
-                    break;
-                case "--min-x":
-                    minX = Integer.parseInt(args[++i]);
-                    break;
-                case "--max-x":
-                    maxX = Integer.parseInt(args[++i]);
-                    break;
-                case "--min-z":
-                    minZ = Integer.parseInt(args[++i]);
-                    break;
-                case "--max-z":
-                    maxZ = Integer.parseInt(args[++i]);
-                    break;
-                case "--output":
-                    outputFile = args[++i];
-                    break;
-                case "--version":
-                    version = args[++i];
-                    break;
-                case "--help":
-                    printHelp();
-                    return;
-                default:
+                case "--seed" -> seed = Long.parseLong(args[++i]);
+                case "--max-y" -> maxY = Integer.parseInt(args[++i]);
+                case "--min-x" -> minX = Integer.parseInt(args[++i]);
+                case "--max-x" -> maxX = Integer.parseInt(args[++i]);
+                case "--min-z" -> minZ = Integer.parseInt(args[++i]);
+                case "--max-z" -> maxZ = Integer.parseInt(args[++i]);
+                case "--version" -> versionName = args[++i];
+                case "--output" -> outputFile = args[++i];
+                case "--threads" -> threads = Integer.parseInt(args[++i]);
+                case "--check-gen" -> checkGen = true;
+                case "--help" -> { printHelp(); return; }
+                default -> {
                     System.err.println("未知参数: " + args[i]);
                     printHelp();
                     System.exit(1);
+                }
             }
         }
 
@@ -67,88 +57,99 @@ public class CmdLineRunner {
             System.exit(1);
         }
 
-        // 执行搜索
-        System.out.println("开始搜索种子 " + seed + "，最大Y=" + maxY);
-        List<CoordResult> results = new ArrayList<>();
-
-        try {
-            // 1. 初始化 SeedChecker（与 GUI 相同）
-            SeedCheckerInitializer initializer = new SeedCheckerInitializer();
-            // 设置版本（可能需要转换为内部版本号）
-            int mcVersion = getMCVersion(version);
-            initializer.setMCVersion(mcVersion);
-            // 设置搜索范围
-            initializer.setSearchArea(minX, maxX, minZ, maxZ);
-            // 设置最大 Y（注意：原 GUI 中 "maxY" 是高度上限，即只找 Y <= maxY 的小屋）
-            initializer.setMaxY(maxY);
-            // 设置是否检查精确生成（设为 true 更准确，但慢）
-            initializer.setCheckExactGeneration(true);
-
-            // 2. 创建 SeedChecker 实例
-            SeedChecker checker = initializer.createSeedChecker();
-
-            // 3. 设置回调收集结果
-            // 由于 SeedChecker 没有直接的回调接口，我们使用它的 `addResultListener` 方法（如果存在）
-            // 或者我们可以在搜索完成后通过 `getResults()` 获取（具体 API 需查看源码）
-            // 根据原仓库代码，SeedChecker 继承自 SwingWorker，有 `get()` 方法等待完成
-            // 我们采用后台执行并等待完成的方式
-            
-            // 启动搜索（假设 SeedChecker 是 SwingWorker，我们使用 execute）
-            checker.execute();
-
-            // 等待搜索完成（最多 5 分钟）
-            boolean done = checker.get(5, TimeUnit.MINUTES);
-            if (!done) {
-                System.err.println("搜索超时，可能未完成");
-                System.exit(1);
-            }
-
-            // 获取结果（假设有 getResults 方法）
-            // 实际需要根据 SeedChecker 的具体实现调整
-            // 这里使用反射尝试获取私有字段 results（如果存在）
-            java.lang.reflect.Field resultsField = null;
-            try {
-                resultsField = SeedChecker.class.getDeclaredField("results");
-                resultsField.setAccessible(true);
-                results = (List<CoordResult>) resultsField.get(checker);
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                // 如果没有 results 字段，尝试其他方式
-                System.err.println("无法获取搜索结果，请检查 SeedChecker API");
-                e.printStackTrace();
-                System.exit(1);
-            }
-
-        } catch (Exception e) {
-            System.err.println("搜索出错: " + e.getMessage());
-            e.printStackTrace();
+        // 4. 版本映射（使用项目现有的 GameVersion 枚举）
+        GameVersion gameVersion = GameVersion.fromDisplayName(versionName);
+        if (gameVersion == null) {
+            System.err.println("错误: 不支持的版本 " + versionName);
             System.exit(1);
         }
+        WorldPresetMode preset = WorldPresetMode.DEFAULT;
 
-        // 如果没有结果，输出提示
-        if (results == null || results.isEmpty()) {
-            System.out.println("未找到任何女巫小屋");
-            return;
+        // 5. 创建 SearchCoords 并启动搜索
+        System.out.println("开始搜索种子 " + seed + "，最大Y=" + maxY + "，版本=" + versionName);
+        SearchCoords searcher = new SearchCoords(gameVersion, preset);
+        List<String> results = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger count = new AtomicInteger(0);
+        AtomicInteger lastPrinted = new AtomicInteger(0);
+
+        searcher.startSearch(
+            seed,
+            threads,
+            minX, maxX, minZ, maxZ,
+            maxY,
+            progress -> {
+                // 进度回调：每 1% 打印一次
+                int pct = (int) (progress.percentage() * 100);
+                int stage = progress.stage();
+                if (pct >= lastPrinted.get() + 1) {
+                    System.out.printf("\r阶段 %d 进度: %d%% (%d 个结果)%n", stage, pct, count.get());
+                    lastPrinted.set(pct);
+                }
+            },
+            result -> {
+                // 结果回调：收集坐标（格式与 GUI 一致）
+                results.add(String.format("/tp %d %d %d", result.x(), result.y(), result.z()));
+                count.incrementAndGet();
+            },
+            checkGen
+        );
+
+        // 6. 等待搜索完成（SearchCoords 没有 awaitCompletion，需要手动轮询）
+        // 通过检查 searcher 的状态来判断（假设有 isRunning 方法，如果没有则用反射或 try-catch）
+        // 这里我们使用一个简单的超时等待
+        System.out.println("\n搜索中，请稍候...");
+        try {
+            // 等待最多 10 分钟
+            for (int i = 0; i < 600; i++) {
+                Thread.sleep(1000);
+                if (count.get() > 0 && !searcher.isRunning()) {
+                    break;
+                }
+                if (i % 30 == 0) {
+                    System.out.printf("  已运行 %d 秒，已找到 %d 个结果...%n", i, count.get());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
 
-        // 按 Y 坐标排序（从低到高）
-        results.sort(Comparator.comparingInt(r -> r.y));
+        // 7. 排序并输出结果
+        results.sort(Comparator.comparingInt(s -> {
+            String[] parts = s.split("\\s+");
+            return parts.length >= 3 ? Integer.parseInt(parts[2]) : Integer.MAX_VALUE;
+        }));
 
-        // 输出到文件
         try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile))) {
             writer.println("找到 " + results.size() + " 个女巫小屋：");
-            for (CoordResult r : results) {
-                writer.println("X=" + r.x + ", Y=" + r.y + ", Z=" + r.z);
+            for (String line : results) {
+                writer.println(line);
             }
-            CoordResult lowest = results.get(0);
-            writer.println("\n最低 Y 坐标的小屋: X=" + lowest.x + ", Y=" + lowest.y + ", Z=" + lowest.z);
-            System.out.println("结果已保存到: " + outputFile);
+            if (!results.isEmpty()) {
+                writer.println("\n最低 Y 坐标的小屋: " + results.get(0));
+            }
+            System.out.println("\n结果已保存到: " + outputFile);
         } catch (IOException e) {
             System.err.println("写入文件失败: " + e.getMessage());
             System.exit(1);
         }
     }
 
+    private static void initLogging() {
+        // 与 Launcher 完全一致的 log4j 初始化
+        System.setProperty("log4j2.isThreadContextMapInheritable", "true");
+        System.setProperty("log4j2.disable.jmx", "true");
+        System.setProperty("log4j2.formatMsgNoLookups", "true");
+        System.setProperty("log4j2.enable.threadlocals", "false");
+        System.setProperty("log4j2.enable.direct.encoders", "false");
+        System.setProperty("max.bg.threads", "2");
+        try {
+            Class.forName("net.minecraft.SharedConstants");
+        } catch (Exception ignored) {
+        }
+    }
+
     private static void printHelp() {
+        System.out.println("LowYSwampHut 命令行搜索工具");
         System.out.println("用法: java -jar LowYSwampHut.jar --seed <种子> [选项]");
         System.out.println("选项:");
         System.out.println("  --seed <种子>       必需，要搜索的种子 (整数)");
@@ -159,16 +160,8 @@ public class CmdLineRunner {
         System.out.println("  --max-z <数值>     Z范围最大值，默认 58593");
         System.out.println("  --version <版本>   Minecraft版本，默认 26.2");
         System.out.println("  --output <文件>    输出文件，默认 result.txt");
+        System.out.println("  --threads <数量>   线程数，默认 CPU核心数/2");
+        System.out.println("  --check-gen        精确检查生成（较慢但更准）");
         System.out.println("  --help             显示此帮助");
-    }
-
-    private static int getMCVersion(String version) {
-        // 将版本字符串转换为内部版本号（需根据实际情况映射）
-        // 示例：26.2 -> 26
-        try {
-            return Integer.parseInt(version.split("\\.")[0]);
-        } catch (Exception e) {
-            return 26;
-        }
     }
 }
