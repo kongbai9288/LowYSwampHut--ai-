@@ -4,9 +4,6 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
-group = 'project'
-version = '1.0'
-
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -14,24 +11,11 @@ java {
 
 repositories {
     mavenCentral()
-    // SeedFinding 官方 Maven 仓库（用于 mccore）
-    maven {
-        url 'https://maven.seedfinding.com'
-    }
-    // JitPack（用于 seedchecker）
-    maven {
-        url 'https://jitpack.io'
-    }
+    maven { url = "https://maven.seedfinding.com/" }
 }
 
 dependencies {
-    // seedchecker（通过 JitPack）
-    implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
-    
-    // mccore（通过 SeedFinding Maven）
-    implementation 'com.seedfinding:mc_core:1.0.0'
-    
-    // Log4j
+    implementation 'nl.jellejurre:seedchecker:1.0.2'
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 }
@@ -46,15 +30,11 @@ shadowJar {
     archiveVersion.set('')
 
     manifest {
-        attributes('Main-Class': 'project.CmdLineRunner')
+        attributes 'Main-Class': 'project.CmdLineRunner'
     }
 
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-    includeEmptyDirs = false
-}
 
-tasks.named('build').configure {
-    dependsOn shadowJar
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
 }
