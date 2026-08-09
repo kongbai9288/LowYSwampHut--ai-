@@ -1,108 +1,172 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.PropertiesFileTransformer
+package project;
 
-plugins {
-    id 'java'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
-}
-java {
-    sourceCompatibility = '17'
-    targetCompatibility = '17'
-}
-group 'org.example'
-version '1.5.0'
-repositories {
-    mavenCentral()
-    gradlePluginPortal()
-    maven {
-        url "https://maven.seedfinding.com"
+import nl.jellejurre.seedchecker.SeedChecker;
+import project.SearchCoords;
+import project.GameVersion;
+import project.WorldPresetMode;
+import project.CoordResult;
+
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * LowYSwampHut 命令行入口（基于 SearchCoords 引擎）
+ * 用法: java -jar LowYSwampHut.jar --seed <种子> [选项]
+ */
+public class CmdLineRunner {
+
+    public static void main(String[] args) {
+        // 1. 初始化 log4j 和 SharedConstants（安全顺序）
+        initLogging();
+
+        // 2. 默认参数
+        long seed = 0;
+        int maxY = -40;
+        int minX = -58594, maxX = 58593;
+        int minZ = -58594, maxZ = 58593;
+        String outputFile = "result.txt";
+        String versionName = "26.2";
+        boolean checkGen = false;
+        int threads = Math.max(1, Math.min(
+            Runtime.getRuntime().availableProcessors() / 2,
+            8
+        ));
+
+        // 3. 解析命令行参数
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--seed", "-s" -> seed = Long.parseLong(args[++i]);
+                case "--max-y" -> maxY = Integer.parseInt(args[++i]);
+                case "--min-x" -> minX = Integer.parseInt(args[++i]);
+                case "--max-x" -> maxX = Integer.parseInt(args[++i]);
+                case "--min-z" -> minZ = Integer.parseInt(args[++i]);
+                case "--max-z" -> maxZ = Integer.parseInt(args[++i]);
+                case "--version" -> versionName = args[++i];
+                case "--output", "-o" -> outputFile = args[++i];
+                case "--threads" -> threads = Integer.parseInt(args[++i]);
+                case "--check-gen" -> checkGen = true;
+                case "--help", "-h" -> { printHelp(); return; }
+                default -> {
+                    System.err.println("未知参数: " + args[i]);
+                    printHelp();
+                    System.exit(1);
+                }
+            }
         }
 
-    maven {
-        url "https://maven.latticg.com"
+        if (seed == 0) {
+            System.err.println("错误: 必须指定 --seed");
+            printHelp();
+            System.exit(1);
         }
 
-    maven {
-
-        url "https://jitpack.io"
-
+        // 4. 版本映射
+        GameVersion gameVersion = GameVersion.fromDisplayName(versionName);
+        if (gameVersion == null) {
+            System.err.println("错误: 不支持的版本 " + versionName);
+            System.exit(1);
         }
-    maven {url "https://repo.jellejurre.dev"}
+        WorldPresetMode preset = WorldPresetMode.DEFAULT;
 
-}
-dependencies {
-    implementation('com.seedfinding:mc_seed:1.171.2')
-    implementation('com.seedfinding:mc_core:1.210.0')
-    implementation('com.seedfinding:mc_feature:1.171.9')
-    implementation('com.github.jellejurre:seed-checker:1.2.0-1.18.1'){transitive=false}
-    implementation 'com.github.KalleStruik:noise-sampler:1.20.0'
+        // 5. 创建 SearchCoords 并启动搜索
+        System.out.println("开始搜索种子 " + seed + "，最大Y=" + maxY + "，版本=" + versionName);
+        long startTime = System.currentTimeMillis();
+        SearchCoords searcher = new SearchCoords(gameVersion, preset);
+        List<CoordResult> rawResults = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger count = new AtomicInteger(0);
+        AtomicInteger lastPrinted = new AtomicInteger(0);
 
+        searcher.startSearch(
+            seed,
+            threads,
+            minX, maxX, minZ, maxZ,
+            maxY,
+            progress -> {
+                int pct = (int) (progress.percentage() * 100);
+                int stage = progress.stage();
+                if (pct >= lastPrinted.get() + 1) {
+                    System.out.printf("\r阶段 %d 进度: %d%% (结果:%d)", stage, pct, count.get());
+                    lastPrinted.set(pct);
+                }
+            },
+            result -> {
+                rawResults.add(result);
+                count.incrementAndGet();
+            },
+            checkGen
+        );
 
-    implementation('com.seedfinding:latticg:1.06@jar')
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.1'
+        // 6. 等待搜索完成（使用 awaitCompletion）
+        try {
+            searcher.awaitCompletion();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("\n搜索被中断");
+            System.exit(1);
+        }
 
-}
-test {
-    useJUnitPlatform()
-}
+        // 7. 结束进度条
+        System.out.println("\n搜索完成，耗时 " + (System.currentTimeMillis() - startTime) / 1000.0 + " 秒");
 
-// 源文件为 UTF-8 时必须指定编码，否则 Windows 下 javac 默认 GBK 会破坏中文等字面量
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
+        // 8. 排序并输出结果
+        if (rawResults.isEmpty()) {
+            System.out.println("未找到符合条件的女巫小屋。");
+            return;
+        }
 
-// 配置 Shadow JAR
-shadowJar {
-    archiveBaseName.set('LowYSwampHut')
-    archiveClassifier.set('')
-    mergeServiceFiles()
-}
+        // 按 Y 坐标排序（从低到高）
+        rawResults.sort(Comparator.comparingInt(CoordResult::y));
 
-// 创建 LowYSwampHutForFixedSeed 的可执行 JAR
-tasks.register('buildMainJar', ShadowJar) {
-    group = 'build'
-    description = 'Creates a fat JAR for LowYSwampHutForFixedSeed'
-    archiveBaseName.set('LowYSwampHutForFixedSeedGUI')
-    archiveClassifier.set('')
-    from sourceSets.main.output
-    configurations = [project.configurations.runtimeClasspath]
-    manifest {
-        attributes 'Main-Class': 'project.Launcher'
-        attributes 'Multi-Release': 'true'
+        try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile))) {
+            writer.println("找到 " + rawResults.size() + " 个女巫小屋：");
+            for (CoordResult r : rawResults) {
+                writer.printf("/tp %d %d %d%n", r.x(), r.y(), r.z());
+            }
+            CoordResult lowest = rawResults.get(0);
+            writer.printf("\n最低 Y 坐标的小屋: /tp %d %d %d%n", lowest.x(), lowest.y(), lowest.z());
+            System.out.println("结果已保存到: " + outputFile);
+        } catch (IOException e) {
+            System.err.println("写入文件失败: " + e.getMessage());
+            System.exit(1);
+        }
     }
-    mergeServiceFiles()
-    transform(Log4j2PluginsCacheFileTransformer)
-    transform(PropertiesFileTransformer) {
-        paths = ['META-INF/spring.handlers', 'META-INF/spring.schemas']
-        mergeStrategy = "append"
-    }
-    // 注意：不要排除 META-INF/versions/**，因为 Multi-Release JAR 需要这些文件
-    exclude 'module-info.class'
-}
 
-// 创建所有 JAR 的任务
-tasks.register('buildAllJars') {
-    group = 'build'
-    description = 'Builds all executable JARs'
-    dependsOn buildMainJar
-}
+    /**
+     * 安全的 log4j + SharedConstants 初始化（顺序必须正确）
+     */
+    private static void initLogging() {
+        System.setProperty("log4j2.isThreadContextMapInheritable", "true");
+        System.setProperty("log4j2.disable.jmx", "true");
+        System.setProperty("log4j2.formatMsgNoLookups", "true");
+        System.setProperty("log4j2.enable.threadlocals", "false");
+        System.setProperty("log4j2.enable.direct.encoders", "false");
+        System.setProperty("max.bg.threads", "2");
 
-['A', 'B', 'C'].each { profile ->
-    tasks.register("benchmark${profile}", JavaExec) {
-        group = 'verification'
-        description = "Runs LowYSwampHut stress profile ${profile}"
-        dependsOn testClasses
-        classpath = sourceSets.test.runtimeClasspath
-        mainClass.set('project.benchmark.BenchmarkRunner')
-        args "--profile=${profile}"
-        jvmArgs '-Xms2g', '-Xmx4g'
+        // ✅ 先触发 log4j 初始化
+        org.apache.logging.log4j.LogManager.getContext(false);
+
+        // ✅ 再加载 Minecraft 的 SharedConstants
+        try {
+            Class.forName("net.minecraft.SharedConstants");
+        } catch (Exception ignored) {
+        }
     }
-shadowJar {
-    manifest {
-        attributes 'Main-Class': 'project.CmdLineRunner'
+
+    private static void printHelp() {
+        System.out.println("LowYSwampHut 命令行搜索工具");
+        System.out.println("用法: java -jar LowYSwampHut.jar --seed <种子> [选项]");
+        System.out.println("选项:");
+        System.out.println("  --seed, -s <种子>   必需，要搜索的种子 (整数)");
+        System.out.println("  --max-y <数值>     最大Y坐标，默认 -40");
+        System.out.println("  --min-x <数值>     X范围最小值，默认 -58594");
+        System.out.println("  --max-x <数值>     X范围最大值，默认 58593");
+        System.out.println("  --min-z <数值>     Z范围最小值，默认 -58594");
+        System.out.println("  --max-z <数值>     Z范围最大值，默认 58593");
+        System.out.println("  --version <版本>   Minecraft版本，默认 26.2");
+        System.out.println("  --output, -o <文件> 输出文件，默认 result.txt");
+        System.out.println("  --threads <数量>   线程数，默认 CPU核心数/2 (上限8)");
+        System.out.println("  --check-gen        精确检查生成（较慢但更准）");
+        System.out.println("  --help, -h         显示此帮助");
     }
-}
-}
 }
