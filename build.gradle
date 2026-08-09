@@ -1,3 +1,17 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'project'
+version = '1.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
 repositories {
     mavenCentral()
     maven { url = "https://maven.seedfinding.com/" }
@@ -6,14 +20,31 @@ repositories {
 }
 
 dependencies {
-    // SeedChecker（关掉传递依赖，避免拉 fabric-loader）
+    implementation('com.seedfinding:mc_core:1.210.0')
+    implementation('com.seedfinding:mc_feature:1.171.9')
     implementation('com.github.jellejurre:seed-checker:1.2.0-1.17.1-pre1') {
         transitive = false
     }
-    // MC core 正式版（它自己带正确版本的 mc_math / mc_seed）
-    implementation 'com.seedfinding:mc_core:1.210.0'
-    implementation 'com.seedfinding:mc_feature:1.171.9'
-
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
+}
+
+application {
+    mainClass = 'project.Launcher'
+}
+
+shadowJar {
+    archiveBaseName.set('LowYSwampHut')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+    manifest {
+        attributes 'Main-Class': 'project.CmdLineRunner'
+    }
+    mergeServiceFiles()
+    transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+}
+
+tasks.named('build').configure {
+    dependsOn shadowJar
 }
