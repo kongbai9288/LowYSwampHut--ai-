@@ -99,4 +99,9 @@ tasks.register('buildAllJars') {
         args "--profile=${profile}"
         jvmArgs '-Xms2g', '-Xmx4g'
     }
+jar {
+    manifest {
+        attributes 'Main-Class': 'project.CmdLineRunner'
+    }
+}
 }
