@@ -14,28 +14,18 @@ java {
 
 repositories {
     mavenCentral()
-    // JitPack：用于 seed-checker
-    maven { url "https://jitpack.io" }
-    // 用于 noise-sampler（从截图看是 1.0.0）
-    maven { url "https://repo.jellejurre.dev" }
-    maven { url "https://maven.fabricmc.net/" }
-    maven { url "https://maven.seedfinding.com/" }
+    maven { url = "https://maven.seedfinding.com" }
+    maven { url = "https://maven.latticg.com" }
+    maven { url = "https://jitpack.io" }
+    maven { url = "https://repo.jellejurre.dev" }
 }
 
 dependencies {
-    // seed-checker（从 JitPack 获取）
-    // 可用版本：1.0.0-1.17.1（截图确认存在）
-    implementation('com.github.jellejurre:seed-checker:1.0.0-1.17.1') {
+    implementation('com.seedfinding:mc_core:1.210.0')
+    implementation('com.seedfinding:mc_feature:1.171.9')
+    implementation('com.github.jellejurre:seed-checker:1.2.0-1.18.1') {
         transitive = false
     }
-
-    // noise-sampler（从截图确认版本为 1.0.0）
-    implementation 'com.github.KalleStruik:noise-sampler:1.0.0'
-
-    // fabric-loader
-    implementation 'net.fabricmc:fabric-loader:0.11.6'
-
-    // Log4j
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 }
@@ -49,7 +39,7 @@ shadowJar {
     archiveClassifier.set('')
     archiveVersion.set('')
     manifest {
-        attributes('Main-Class': 'project.CmdLineRunner')
+        attributes 'Main-Class': 'project.CmdLineRunner'
     }
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
