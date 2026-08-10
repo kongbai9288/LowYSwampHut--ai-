@@ -14,21 +14,14 @@ java {
 
 repositories {
     mavenCentral()
-    maven { url = "https://maven.seedfinding.com/" }
-    maven { url = "https://repo.jellejurre.dev" }
+    maven { url "https://jitpack.io" }
+    maven { url "https://maven.fabricmc.net/" }
+    maven { url "https://maven.seedfinding.com/" }
 }
 
 dependencies {
-    // ✅ 唯一正确的 SeedChecker 坐标
-    implementation('com.github.jellejurre:seed-checker:1.2.0-1.17.1-pre1') {
-        transitive = false
-    }
-
-    // ✅ MC Core 正式版（它自己带 mc_math / mc_seed）
-    implementation 'com.seedfinding:mc_core:1.210.0'
-    implementation 'com.seedfinding:mc_feature:1.171.9'
-
-    // ✅ Log4j（SeedChecker / MC 必须）
+    implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
+    implementation 'net.fabricmc:fabric-loader:0.11.6'
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 }
@@ -41,15 +34,13 @@ shadowJar {
     archiveBaseName.set('LowYSwampHut')
     archiveClassifier.set('')
     archiveVersion.set('')
-
     manifest {
-        attributes 'Main-Class': 'project.CmdLineRunner'
+        attributes('Main-Class': 'project.CmdLineRunner')
     }
-
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+    includeEmptyDirs = false
 }
 
 tasks.named('build').configure {
