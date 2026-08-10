@@ -22,7 +22,7 @@ repositories {
 dependencies {
     implementation('com.seedfinding:mc_core:1.210.0')
     implementation('com.seedfinding:mc_feature:1.171.9')
-    implementation('com.github.jellejurre:seed-checker:1.2.0-1.17.1-pre1') {
+    implementation('com.github.jellejurre:seed-checker:1.2.0-1.18.1') {
         transitive = false
     }
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
