@@ -44,7 +44,6 @@ shadowJar {
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-    includeEmptyDirs = false
 }
 
 tasks.named('build').configure {
