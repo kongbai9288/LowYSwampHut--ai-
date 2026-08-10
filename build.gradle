@@ -15,6 +15,7 @@ java {
 repositories {
     mavenCentral()
     maven { url "https://jitpack.io" }
+    maven { url "https://maven.fabricmc.net/" }   // ✅ 添加 Fabric 官方仓库
     maven { url "https://maven.seedfinding.com/" }
     maven { url "https://nexus.seedfinding.com/repository/maven-public/" }
 }
@@ -23,18 +24,12 @@ dependencies {
     // seed-checker（通过 JitPack）
     implementation 'com.github.jellejurre:seed-checker:1.0.0-1.17.1'
     
-    // fabric-loader
+    // fabric-loader 现在可以从 fabric 官方仓库拉取
     implementation 'net.fabricmc:fabric-loader:0.11.6'
     
-    // SeedFinding 系列库
+    // 只显式声明 mc_core 和 mc_seed，其他库由传递依赖自动拉取
     implementation 'com.seedfinding:mc_core:1.200.0'
-    implementation 'com.seedfinding:mc_math:1.200.0'
-    implementation 'com.seedfinding:mc_seed:1.171.2'   // ✅ 关键修改
-    implementation 'com.seedfinding:mc_biome:1.200.0'
-    implementation 'com.seedfinding:mc_feature:1.200.0'
-    implementation 'com.seedfinding:mc_noise:1.200.0'
-    implementation 'com.seedfinding:mc_reversal:1.200.0'
-    implementation 'com.seedfinding:mc_terrain:1.200.0'
+    implementation 'com.seedfinding:mc_seed:1.171.2'
     
     // Log4j
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
