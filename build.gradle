@@ -14,28 +14,21 @@ java {
 
 repositories {
     mavenCentral()
-    // JitPack：用于获取 seed-checker[reference:4]
-    maven { url "https://jitpack.io" }
-    // Fabric 官方仓库：用于获取 fabric-loader[reference:6][reference:7]
-    maven { url "https://maven.fabricmc.net/" }
-    // SeedFinding 仓库：用于获取 mc_core, mc_seed 等[reference:8][reference:9]
-    maven { url "https://maven.seedfinding.com/" }
+    maven { url = "https://maven.seedfinding.com/" }
+    maven { url = "https://repo.jellejurre.dev" }
 }
 
 dependencies {
-    // 核心依赖：seed-checker（关闭传递依赖以避免版本冲突）
-    implementation('com.github.jellejurre:seed-checker:1.0.0-1.17.1') {
+    // ✅ 唯一正确的 SeedChecker 坐标
+    implementation('com.github.jellejurre:seed-checker:1.2.0-1.17.1-pre1') {
         transitive = false
     }
-    
-    // 显式声明 fabric-loader[reference:11]
-    implementation 'net.fabricmc:fabric-loader:0.11.6'
-    
-    // 显式声明 SeedFinding 系列库[reference:12]
-    implementation 'com.seedfinding:mc_core:1.200.0'
-    implementation 'com.seedfinding:mc_seed:1.171.2'  // mc_seed 版本独立，与 mc_core 不同步
-    
-    // Log4j
+
+    // ✅ MC Core 正式版（它自己带 mc_math / mc_seed）
+    implementation 'com.seedfinding:mc_core:1.210.0'
+    implementation 'com.seedfinding:mc_feature:1.171.9'
+
+    // ✅ Log4j（SeedChecker / MC 必须）
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
 }
@@ -50,13 +43,13 @@ shadowJar {
     archiveVersion.set('')
 
     manifest {
-        attributes('Main-Class': 'project.CmdLineRunner')
+        attributes 'Main-Class': 'project.CmdLineRunner'
     }
 
     mergeServiceFiles()
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
+
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-    includeEmptyDirs = false
 }
 
 tasks.named('build').configure {
